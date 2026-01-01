@@ -1,0 +1,38 @@
+dataloader:
+  local_data_root: '/media/fanyang/TartanAir/TartanAirV2/DATA'
+  euler_data_root: '/cluster/scratch/fanyang1/TartanAirV2/DATA'
+  new_image_shape_hw: [640, 640]
+  crop_min: 320
+  resize_shape_hw: [40, 64]
+  batch_size: 256
+  num_workers: 4
+  min_depth: 0.25
+  max_depth: 10.0
+  valid_ratio_threshold: 0.10
+  focal_length: 28.0
+  baseline: 0.12
+  shuffle: True
+
+training:
+  log_space: False
+  ENU_frame: False
+  init_beta: 0.1
+  final_beta: 0.5
+  noise_type: 'parametric' # 'baseline', 'parametric'
+  epochs: 10
+  val_iterations: 100
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  max_pred_len: 16
+  noise_prob: 0.9
+  load_model: False
+  pretrain_vae: False
+  is_train: True
+  save_model: True
+  is_wandb: False # will be overriden if running on cluster
+  run_name: 'regnet-zedx-pretrain'
+
+model:
+  model_type: 'vae'
+  latent_dim: 64
+  pose_dim: 16

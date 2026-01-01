@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Model checkpoints and saved weights
+model_save/
+*.pth
+*.pt
+*.ckpt
+
+# Data and logs
+local_depth_images*.txt
+*.log
+runs/
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.env
+
+# Jupyter
+.ipynb_checkpoints/

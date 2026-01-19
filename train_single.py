@@ -35,7 +35,7 @@ class LossFunction(nn.Module):
 
     def forward(self, output_dict, target_x, beta=0.1):
         recon_x = output_dict['depth']
-        mu, logvar = output_dict['vae']
+        mu, logvar = output_dict['mu'], output_dict['logvar']
 
         recon_x = recon_x.unsqueeze(1) if len(recon_x.size()) == 3 else recon_x
         target_x = target_x.unsqueeze(1) if len(target_x.size()) == 3 else target_x

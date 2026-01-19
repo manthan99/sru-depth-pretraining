@@ -10,7 +10,7 @@
 VAE-based depth perception pretraining optimized for RealSense and ZED depth cameras. This repository provides:
 
 - **Training**: Single-frame depth VAE encoder-decoder model (`train_single.py`)
-- **Deployment**: TorchScript model compilation (`convert_jit.py`)
+- **Deployment**: TorchScript (`convert_jit.py`) and ONNX (`convert_onnx.py`) model export
 - **Visualization**: Real-time depth reconstruction with ZED cameras (`vae_viz.py`)
 
 The VAE learns to compress and reconstruct depth images for robotics, 3D scene understanding, and depth-based world models.
@@ -19,7 +19,7 @@ The VAE learns to compress and reconstruct depth images for robotics, 3D scene u
 
 - ✅ Single-frame depth VAE encoder-decoder architecture
 - ✅ Depth noise augmentation (parametric and baseline models)
-- ✅ TorchScript compilation for C++ deployment
+- ✅ TorchScript and ONNX export for deployment (Jetson, Intel NUC, generic)
 - ✅ Real-time visualization and monitoring
 - ✅ Multi-camera support (RealSense D435, ZED X)
 - ✅ Flexible YAML-based configuration
@@ -34,7 +34,9 @@ The VAE learns to compress and reconstruct depth images for robotics, 3D scene u
 ```
 .
 ├── train_single.py              # Main training script for single-frame VAE
-├── convert_jit.py               # Convert trained model to TorchScript format
+├── convert_jit.py               # Export model to TorchScript format
+├── convert_onnx.py              # Export model to ONNX format (Jetson/NUC/generic)
+├── test_export.py               # Verify exported model correctness
 ├── vae_viz.py                   # Real-time depth visualization with ZED camera
 ├── config/                      # Configuration files
 │   ├── pretrain.yaml           # Base configuration
@@ -130,28 +132,62 @@ Available in `model_save/release_model/`:
   - Uses `config/pretrain_zedx.yaml`
   - Ready for fine-tuning or deployment via `vae_viz.py`
 
-### Model Compilation (TorchScript)
+### Model Export
 
-Convert trained models to TorchScript format for C++ deployment:
+Export trained models for deployment on various platforms.
+
+#### TorchScript Export
+
+Convert to TorchScript format for C++ deployment:
 
 ```bash
-python convert_jit.py
+# Full VAE model
+python convert_jit.py --model_path model_save/vae_pretrain_new.pth
+
+# Encoder-only for robot deployment (outputs latent mu)
+python convert_jit.py --model_path model_save/vae_pretrain_new.pth --deploy
 ```
 
-**Default behavior:**
-- Loads: `model_save/vae_pretrain_new.pth`
-- Saves: `output/vae_pretrain_new_jit.pt`
+#### ONNX Export
 
-**Custom compilation:**
-```python
-from convert_jit import compile_vae_model
+Export to ONNX format for cross-platform deployment:
 
-compile_vae_model(
-    model_path="path/to/model.pth",
-    output_path="path/to/output.pt",
-    latent_dim=64
-)
+```bash
+# Generic ONNX (wide compatibility)
+python convert_onnx.py --model_path model_save/vae_pretrain_new.pth
+
+# NVIDIA Jetson (TensorRT optimized)
+python convert_onnx.py --model_path model_save/vae_pretrain_new.pth --platform jetson
+
+# Intel NUC (OpenVINO/ONNX Runtime)
+python convert_onnx.py --model_path model_save/vae_pretrain_new.pth --platform nuc
+
+# Encoder-only deploy mode
+python convert_onnx.py --model_path model_save/vae_pretrain_new.pth --platform jetson --deploy
 ```
+
+**Platform-specific options:**
+
+| Platform | Opset | Dynamic Batch | Use Case |
+|----------|-------|---------------|----------|
+| `generic` | 14 | Yes | Wide compatibility |
+| `jetson` | 17 | No | NVIDIA Jetson + TensorRT |
+| `nuc` | 17 | Yes | Intel NUC + OpenVINO |
+
+#### Verify Exports
+
+Test exported models for numerical correctness:
+
+```bash
+python test_export.py --model_path model_save/vae_pretrain_new.pth
+```
+
+This runs comprehensive tests including:
+- Determinism verification
+- Batch consistency
+- JIT export correctness
+- ONNX export correctness (all platforms)
+- Deploy mode verification
 
 ### Real-time Visualization
 

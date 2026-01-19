@@ -50,7 +50,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../'))
     
 class EncoderFPN(nn.Module):
     def __init__(self, in_channel, out_channel, pretrained=True):
-        super(EncoderFPN, self).__init__()
+        super().__init__()
         # pixel positional encoding
         weigths = RegNet_X_400MF_Weights.DEFAULT if pretrained else None
         encoder = regnet_x_400mf(weights=weigths)
@@ -62,47 +62,51 @@ class EncoderFPN(nn.Module):
         self.enc_1 = encoder[1][:2]
         self.enc_2 = encoder[1][2]
         self.enc_3 = encoder[1][3]
-        
+
         # Feature Pyramid Network
         self.fpn = FeaturePyramidNetwork([64, 160, 400], out_channel)
 
-    def forward(self, x):
-        out = OrderedDict()
+    def _encode(self, x: torch.Tensor) -> torch.Tensor:
+        """Core encoding logic shared by all encoder variants."""
+        out: dict[str, torch.Tensor] = {}
         x = self.enc(x)
         out['feat1'] = self.enc_1(x)
         out['feat2'] = self.enc_2(out['feat1'])
         out['feat3'] = self.enc_3(out['feat2'])
-        
+
         out = self.fpn(out)
-        
+
         return out['feat1']
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self._encode(x)
     
 class FuseEncoder(EncoderFPN):
     def __init__(self, out_channel, pretrained=True):
-        super(FuseEncoder, self).__init__(4, out_channel, pretrained)
-        
-    def forward(self, rgb, depth):
+        super().__init__(4, out_channel, pretrained)
+
+    def forward(self, rgb: torch.Tensor, depth: torch.Tensor) -> torch.Tensor:
         # check if depth has channel dimension
         if depth.dim() == 3:
             depth = depth.unsqueeze(1)
         x = torch.cat([rgb, depth], dim=1)
-        return super(FuseEncoder, self).forward(x)
+        return self._encode(x)
     
 # RGB image encoder
 class RGBEncoder(EncoderFPN):
     def __init__(self, out_channel, pretrained=True):
-        super(RGBEncoder, self).__init__(3, out_channel, pretrained)
+        super().__init__(3, out_channel, pretrained)
         
 # Depth image encoder
 class DepthEncoder(EncoderFPN):
     def __init__(self, out_channel, pretrained=True):
-        super(DepthEncoder, self).__init__(1, out_channel, pretrained)
-        
-    def forward(self, x):
+        super().__init__(1, out_channel, pretrained)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # check if depth has channel dimension
         if x.dim() == 3:
             x = x.unsqueeze(1)
-        return super(DepthEncoder, self).forward(x)
+        return self._encode(x)
         
         
 # Test

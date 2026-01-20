@@ -60,9 +60,9 @@ The VAE learns to compress and reconstruct depth images for robotics, 3D scene u
 ## Installation
 
 **Requirements:**
-- Python 3.8+
-- PyTorch 1.12+
-- CUDA 11.6+ (optional)
+- Python 3.10+
+- PyTorch 2.0+
+- CUDA 12.1+ (optional, for GPU acceleration)
 
 **Setup:**
 ```bash
@@ -70,10 +70,22 @@ The VAE learns to compress and reconstruct depth images for robotics, 3D scene u
 conda create -n depth-vae python=3.10
 conda activate depth-vae
 
-# Install dependencies
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-pip install pyyaml numpy matplotlib
-pip install pyzed-sl  # Optional: For ZED camera support
+# Install PyTorch (CUDA 12.1)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Or for CUDA 12.4 (latest)
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# Or CPU-only
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# Install other dependencies
+pip install pyyaml numpy matplotlib opencv-python wandb tqdm scikit-image
+
+# Optional: For ZED camera support
+# First install ZED SDK from https://www.stereolabs.com/developers/release
+# Then install the Python API:
+python -m pip install pyzed --index-url https://download.stereolabs.com/python/
 ```
 
 ## Usage

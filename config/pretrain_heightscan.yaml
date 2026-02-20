@@ -1,18 +1,17 @@
 dataloader:
-  data_type: 'depth'
-  local_data_root: '/media/fanyang/TartanAir/TartanAirV2/DATA'
-  euler_data_root: '/cluster/scratch/fanyang1/TartanAirV2/DATA'
-  image_list: 'local_depth_images_zedx.txt'
-  new_image_shape_hw: [640, 640]
-  crop_min: 320
-  resize_shape_hw: [40, 64]
+  data_type: 'heightscan'
+  local_data_root: '/home/fanyang1/git/fan_nav/IsaacLab/data/heightscan'
+  euler_data_root: '/cluster/scratch/fanyang1/heightscan/DATA'
+  image_list: 'local_heightscan_images.txt'
+  new_image_shape_hw: [51, 51]
+  crop_min: 40
+  resize_shape_hw: [51, 51]
   batch_size: 256
-  num_workers: 4
-  min_depth: 0.25
-  max_depth: 10.0
+  num_workers: 0
+  min_depth: -2.0
+  max_depth: 2.0
   valid_ratio_threshold: 0.10
-  focal_length: 28.0
-  baseline: 0.12
+  use_augmentation: False
   shuffle: True
 
 training:
@@ -26,13 +25,13 @@ training:
   learning_rate: 0.001
   weight_decay: 0.0001
   max_pred_len: 16
-  noise_prob: 0.9
+  noise_prob: 0.0
   load_model: False
   pretrain_vae: False
   is_train: False
   save_model: True
   is_wandb: False # will be overriden if running on cluster
-  run_name: 'regnet-zedx-pretrain'
+  run_name: 'heightscan-pretrain'
 
 model:
   model_type: 'vae'

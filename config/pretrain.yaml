@@ -1,4 +1,5 @@
 dataloader:
+  data_type: 'depth'
   local_data_root: '/media/fanyang/TartanAir/TartanAirV2/DATA'
   euler_data_root: '/cluster/scratch/fanyang1/TartanAirV2/DATA'
   new_image_shape_hw: [640, 640]

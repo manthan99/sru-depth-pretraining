@@ -198,7 +198,8 @@ def validate_and_visualize(model, data_loader, depth_noise, device, config, norm
                 # Determine whether to add noise to each depth image in the batch based on noise_prob
                 noise_depth = normalize_depth_input(depth_input).clone()
                 noise_mask = torch.rand(noise_depth.size(0)) < noise_prob
-                noise_depth[noise_mask] = depth_noise(depth_input[noise_mask])
+                if noise_mask.sum() > 0:
+                    noise_depth[noise_mask] = depth_noise(depth_input[noise_mask])
                 
                 out_dict = model(noise_depth)
                 

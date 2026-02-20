@@ -607,6 +607,144 @@ def test_onnx_deploy(
     return all_pass
 
 
+def test_onnx_preprocess_export(
+    model_path: str,
+    latent_dim: int = 64,
+    min_depth: float = 0.25,
+    max_depth: float = 10.0,
+    encoder_hw: tuple = (40, 64),
+    raw_hw: tuple = (600, 960),
+    rtol: float = 1e-3,
+    atol: float = 1e-3,
+) -> bool:
+    """Test ONNX export of the combined preprocessing + VAE encoder model.
+
+    Constructs a raw depth image that contains NaN, Inf, and out-of-range
+    values, runs both the PyTorch and ONNX versions, and verifies that their
+    outputs match.
+
+    Args:
+        model_path: Path to model weights
+        latent_dim: VAE latent dimension
+        min_depth: Minimum valid depth for DepthPreprocess
+        max_depth: Maximum valid depth for DepthPreprocess
+        encoder_hw: (height, width) the encoder expects after resize
+        raw_hw: (height, width) of the raw camera input
+        rtol: Relative tolerance for comparison
+        atol: Absolute tolerance for comparison
+
+    Returns:
+        True if test passes, False otherwise
+    """
+    print("\n" + "=" * 60)
+    print("Testing ONNX Export with Preprocessing")
+    print("=" * 60)
+
+    try:
+        import onnx
+        import onnxruntime as ort
+    except ImportError as e:
+        print(f"\033[33mSkipping preprocess ONNX test: {e}\033[0m")
+        print("Install with: pip install onnx onnxruntime")
+        return True
+
+    from convert_onnx import DepthPreprocess, VAEDeployWithPreprocess, export_onnx_with_preprocess
+
+    # Load original model
+    print("Loading PyTorch model...")
+    pytorch_model = load_pytorch_model(model_path, latent_dim)
+
+    # Build PyTorch preprocessing + encoder pipeline
+    preprocess = DepthPreprocess(
+        min_depth=min_depth,
+        max_depth=max_depth,
+        output_height=encoder_hw[0],
+        output_width=encoder_hw[1],
+    )
+    pytorch_pipeline = VAEDeployWithPreprocess(preprocess, pytorch_model)
+    pytorch_pipeline.eval()
+
+    # Create a synthetic raw depth input that exercises all preprocessing paths:
+    #  - normal valid pixels
+    #  - NaN pixels  -> should become 0.0
+    #  - Inf pixels  -> should become 0.0
+    #  - below min_depth -> should become 0.0
+    #  - above max_depth -> should become 0.0
+    torch.manual_seed(42)
+    raw_input = torch.rand(1, 1, *raw_hw) * (max_depth - min_depth) + min_depth  # valid range
+    # Inject invalid values into distinct regions
+    raw_input[0, 0, :10, :] = float("nan")
+    raw_input[0, 0, 10:20, :] = float("inf")
+    raw_input[0, 0, 20:30, :] = min_depth * 0.5  # below min -> mask to 0
+    raw_input[0, 0, 30:40, :] = max_depth * 2.0  # above max -> mask to 0
+
+    print(f"Raw input shape: {raw_input.shape}")
+    print(f"  NaN count:  {raw_input.isnan().sum().item()}")
+    print(f"  Inf count:  {raw_input.isinf().sum().item()}")
+
+    # Get reference output from PyTorch pipeline
+    with torch.no_grad():
+        pytorch_mu = pytorch_pipeline(raw_input)
+
+    all_pass = True
+
+    for platform in ["generic", "jetson", "nuc"]:
+        print(f"\n--- Testing platform: {platform} ---")
+
+        with tempfile.NamedTemporaryFile(suffix=".onnx", delete=False) as f:
+            onnx_path = f.name
+
+        try:
+            print(f"Exporting to ONNX with preprocess ({platform})...")
+            export_onnx_with_preprocess(
+                model_path=model_path,
+                output_path=onnx_path,
+                platform=platform,
+                latent_dim=latent_dim,
+                min_depth=min_depth,
+                max_depth=max_depth,
+                encoder_height=encoder_hw[0],
+                encoder_width=encoder_hw[1],
+                raw_height=raw_hw[0],
+                raw_width=raw_hw[1],
+                batch_size=1,
+                deploy=True,
+                fp16=False,
+                static=(platform == "jetson"),
+            )
+
+            # Verify ONNX model
+            onnx_model = onnx.load(onnx_path)
+            onnx.checker.check_model(onnx_model)
+
+            # Run ONNX Runtime inference
+            ort_session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
+            ort_inputs = {"input": raw_input.numpy()}
+            ort_outputs = ort_session.run(None, ort_inputs)
+            onnx_mu = ort_outputs[0]
+
+            # Compare
+            mu_match = np.allclose(pytorch_mu.numpy(), onnx_mu, rtol=rtol, atol=atol)
+            mu_diff = np.abs(pytorch_mu.numpy() - onnx_mu).max()
+
+            print(f"  Mu: {'PASS' if mu_match else 'FAIL'} (max diff: {mu_diff:.2e})")
+
+            if mu_match:
+                print(f"\033[32m✓ ONNX Preprocess Test ({platform}) PASSED\033[0m")
+            else:
+                print(f"\033[31m✗ ONNX Preprocess Test ({platform}) FAILED\033[0m")
+                all_pass = False
+
+        except Exception as e:
+            print(f"\033[31m✗ ONNX Preprocess Test ({platform}) FAILED with error: {e}\033[0m")
+            all_pass = False
+
+        finally:
+            Path(onnx_path).unlink(missing_ok=True)
+
+    return all_pass
+
+
 def main():
     parser = argparse.ArgumentParser(description="Test exported model correctness")
     parser.add_argument(
@@ -647,6 +785,35 @@ def main():
         "--skip_deploy",
         action="store_true",
         help="Skip deploy mode tests",
+    )
+    parser.add_argument(
+        "--skip_preprocess",
+        action="store_true",
+        help="Skip ONNX export with preprocessing test",
+    )
+    parser.add_argument(
+        "--min_depth",
+        type=float,
+        default=0.25,
+        help="Minimum valid depth for preprocessing test (default: 0.25)",
+    )
+    parser.add_argument(
+        "--max_depth",
+        type=float,
+        default=10.0,
+        help="Maximum valid depth for preprocessing test (default: 10.0)",
+    )
+    parser.add_argument(
+        "--raw_height",
+        type=int,
+        default=600,
+        help="Raw camera input height for preprocessing test (default: 600, ZED X SVGA)",
+    )
+    parser.add_argument(
+        "--raw_width",
+        type=int,
+        default=960,
+        help="Raw camera input width for preprocessing test (default: 960, ZED X SVGA)",
     )
 
     args = parser.parse_args()
@@ -690,6 +857,16 @@ def main():
             results["onnx_deploy"] = test_onnx_deploy(
                 args.model_path, args.latent_dim, input_shape
             )
+
+    if not args.skip_preprocess:
+        results["onnx_preprocess"] = test_onnx_preprocess_export(
+            model_path=args.model_path,
+            latent_dim=args.latent_dim,
+            min_depth=args.min_depth,
+            max_depth=args.max_depth,
+            encoder_hw=(args.input_height, args.input_width),
+            raw_hw=(args.raw_height, args.raw_width),
+        )
 
     # Summary
     print("\n" + "#" * 60)

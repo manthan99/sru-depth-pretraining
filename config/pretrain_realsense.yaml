@@ -1,7 +1,8 @@
 dataloader:
+  data_type: 'depth'
   local_data_root: '/media/fanyang/TartanAir/TartanAirV2/DATA'
   euler_data_root: '/cluster/scratch/fanyang1/TartanAirV2/DATA'
-  depth_image_list: 'local_depth_images_realsense.txt'
+  image_list: 'local_depth_images_realsense.txt'
   new_image_shape_hw: [640, 640]
   crop_min: 320
   resize_shape_hw: [30, 53]

@@ -61,8 +61,8 @@ The VAE learns to compress and reconstruct depth images for robotics, 3D scene u
 
 **Requirements:**
 - Python 3.10+
-- PyTorch 2.0+
-- CUDA 12.1+ (optional, for GPU acceleration)
+- PyTorch 2.5+
+- CUDA 12.8+ (for RTX 50-series GPUs) or CUDA 12.1+ (for older GPUs)
 
 **Setup:**
 ```bash
@@ -70,13 +70,18 @@ The VAE learns to compress and reconstruct depth images for robotics, 3D scene u
 conda create -n depth-vae python=3.10
 conda activate depth-vae
 
-# Install PyTorch (CUDA 12.1)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# Install PyTorch - choose based on your GPU:
 
-# Or for CUDA 12.4 (latest)
+# For RTX 50-series (5090, 5080, etc.) - requires CUDA 12.8 and PyTorch nightly
+pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+
+# For RTX 40-series, 30-series, and older (CUDA 12.4)
 # pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
-# Or CPU-only
+# For RTX 40-series, 30-series, and older (CUDA 12.1)
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# CPU-only (no GPU acceleration)
 # pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # Install other dependencies
@@ -87,6 +92,17 @@ pip install pyyaml numpy matplotlib opencv-python wandb tqdm scikit-image
 # Then install the Python API:
 python -m pip install pyzed --index-url https://download.stereolabs.com/python/
 ```
+
+### GPU Compatibility
+
+| GPU Series | Architecture | CUDA Capability | PyTorch Index URL |
+|------------|--------------|-----------------|-------------------|
+| RTX 50xx (5090, 5080, etc.) | Blackwell | sm_120 | `whl/nightly/cu128` |
+| RTX 40xx (4090, 4080, etc.) | Ada Lovelace | sm_89 | `whl/cu124` or `whl/cu121` |
+| RTX 30xx (3090, 3080, etc.) | Ampere | sm_86 | `whl/cu124` or `whl/cu121` |
+| RTX 20xx / GTX 16xx | Turing | sm_75 | `whl/cu124` or `whl/cu121` |
+
+> **Note**: RTX 50-series GPUs (Blackwell architecture) require PyTorch nightly builds with CUDA 12.8 support. Stable PyTorch releases do not yet support sm_120 compute capability.
 
 ## Usage
 
@@ -367,6 +383,27 @@ If you use this codebase in your research, please cite:
 **Affiliation**: Robotic Systems Lab, ETH Zurich
 
 ## Troubleshooting
+
+**CUDA Error: "no kernel image is available for execution on the device"**
+
+This error occurs when your GPU architecture is not supported by your PyTorch installation. Common causes:
+
+1. **RTX 50-series GPUs (5090, 5080, etc.)**: These require PyTorch nightly with CUDA 12.8:
+   ```bash
+   pip uninstall torch torchvision torchaudio
+   pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+   ```
+
+2. **Verify GPU compatibility**: Check your GPU's compute capability:
+   ```bash
+   nvidia-smi --query-gpu=name,compute_cap --format=csv
+   python -c "import torch; print(f'PyTorch CUDA archs: {torch.cuda.get_arch_list()}')"
+   ```
+
+3. **Temporary workaround** (CPU mode):
+   ```bash
+   CUDA_VISIBLE_DEVICES="" python train_single.py --config config/pretrain.yaml
+   ```
 
 **ZED Camera Not Detected**
 - Verify camera is connected via USB

@@ -99,8 +99,8 @@ class RGBEncoder(EncoderFPN):
         
 # Depth image encoder
 class DepthEncoder(EncoderFPN):
-    def __init__(self, out_channel, pretrained=True):
-        super().__init__(1, out_channel, pretrained)
+    def __init__(self, out_channel, pretrained=True, in_channel=1):
+        super().__init__(in_channel, out_channel, pretrained)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # check if depth has channel dimension

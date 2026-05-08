@@ -43,8 +43,8 @@ class RGBDecoder(VAEDecoder):
         super(RGBDecoder, self).__init__(input_dim, 3)
         
 class DepthDecoder(VAEDecoder):
-    def __init__(self, input_dim):
-        super(DepthDecoder, self).__init__(input_dim, 1)
+    def __init__(self, input_dim, out_dim=1):
+        super(DepthDecoder, self).__init__(input_dim, out_dim)
     
 # Test
 if __name__ == "__main__":

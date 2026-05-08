@@ -14,13 +14,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../'))
 from network import DepthEncoder, DepthDecoder, VAESampler
 
 class VAENet(torch.nn.Module):
-    def __init__(self, latent_dim: int):
+    def __init__(self, latent_dim: int, in_channels: int = 1, out_channels: int = 1):
         super().__init__()
-        self.depth_encoder = DepthEncoder(latent_dim)
+        self.depth_encoder = DepthEncoder(latent_dim, in_channel=in_channels)
 
         self.vae_sampler = VAESampler(latent_dim, latent_dim)
 
-        self.depth_decoder = DepthDecoder(latent_dim)
+        self.depth_decoder = DepthDecoder(latent_dim, out_dim=out_channels)
 
     def forward(self, depth: torch.Tensor) -> dict[str, torch.Tensor]:
         feat = self.depth_encoder(depth)

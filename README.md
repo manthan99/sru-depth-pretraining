@@ -153,6 +153,24 @@ model:
 
 To use a different config, modify the config path in `train_single.py` or pass it as an argument.
 
+### Multi-GPU WebDataset Pretraining
+
+The Lightning entry point trains the VAE from WebDataset tar shards containing
+depth PNGs plus JSON metadata:
+
+```bash
+conda activate dinov2
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
+python train_lightning_webdataset.py --config config/pretrain_webdataset.yaml
+```
+
+Set `dataloader.train_data_root` and `dataloader.val_data_root` in
+`config/pretrain_webdataset.yaml` to your shard directories. The loader follows
+the `rl_nav/data/webdataset_vision_png.py` depth convention, applies depth noise
+on the decoded metric depth first, then converts to the three-channel log-depth
+representation and normalizes with `[0.485, 0.456, 0.406]` mean and
+`[0.229, 0.224, 0.225]` std.
+
 #### Pre-trained Models
 
 Available in `model_save/release_model/`:

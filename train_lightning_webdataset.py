@@ -11,6 +11,9 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.strategies import DDPStrategy
 
+import math
+import torchvision.utils as vutils
+
 from dataloader.webdataset_depth import WebDatasetDepthDataModule
 from network import VAENet
 
@@ -36,13 +39,13 @@ class VAELoss(nn.Module):
 
 
 class DepthVAELightningModule(pl.LightningModule):
-    def __init__(self, model_config: dict, training_config: dict):
+    def __init__(self, model_config: dict, training_config: dict, dataloader_config: dict = None):
         super().__init__()
-        self.save_hyperparameters({"model": model_config, "training": training_config})
+        self.save_hyperparameters({"model": model_config, "training": training_config, "dataloader": dataloader_config})
         self.model = VAENet(
             latent_dim=model_config.get("latent_dim", 64),
             in_channels=model_config.get("in_channels", 3),
-            out_channels=model_config.get("out_channels", 1),
+            out_channels=model_config.get("out_channels", 3),
         )
         self.criterion = VAELoss(scale=training_config.get("loss_scale", 10.0))
         self.learning_rate = training_config.get("learning_rate", 1e-3)
@@ -81,7 +84,51 @@ class DepthVAELightningModule(pl.LightningModule):
         self.log("val/loss", loss, prog_bar=True, on_epoch=True, sync_dist=True)
         self.log("val/recon_loss", recon_loss, on_epoch=True, sync_dist=True)
         self.log("val/kl_loss", kl_loss, on_epoch=True, sync_dist=True)
+
+        # Log visualizations for the first batch
+        if batch_idx == 0 and self.logger and hasattr(self.logger, "experiment"):
+            self._log_visualizations(depth_input, depth_target, output["depth"], "val/vis")
+
         return loss
+
+    def _log_visualizations(self, noisy_in, clean_target, recon, key):
+        import wandb
+        # Extract first 8 samples
+        n = min(noisy_in.shape[0], 8)
+        noisy_in = noisy_in[:n]
+        clean_target = clean_target[:n]
+        recon = recon[:n]
+
+        # Denormalize and convert back to metric depth
+        # Using channel 0 (log100) for deconversion as requested
+        def to_metric(x):
+            # 1. Denormalize
+            mean = torch.tensor(self.hparams.dataloader.get("input_mean", [0.485, 0.456, 0.406]), device=x.device).view(1, 3, 1, 1)
+            std = torch.tensor(self.hparams.dataloader.get("input_std", [0.229, 0.224, 0.225]), device=x.device).view(1, 3, 1, 1)
+            x = x * std + mean
+            
+            # 2. Extract channel 0 and deconvert log space
+            ch0 = torch.clamp(x[:, 0:1, :, :], 0.0, 1.0)
+            max_d = self.hparams.dataloader.get("max_depth_ch0", 100.0)
+            metric = torch.expm1(ch0 * math.log1p(max_d))
+            return metric
+
+        with torch.no_grad():
+            metric_in = to_metric(noisy_in)
+            metric_tgt = to_metric(clean_target)
+            metric_rec = to_metric(recon)
+
+            # Clamp for visualization [0, max_depth]
+            max_vis = self.hparams.dataloader.get("max_depth", 10.0)
+            vis_in = torch.clamp(metric_in / max_vis, 0, 1)
+            vis_tgt = torch.clamp(metric_tgt / max_vis, 0, 1)
+            vis_rec = torch.clamp(metric_rec / max_vis, 0, 1)
+            
+            # Create a vertical stack of rows (Noisy, Target, Recon)
+            combined = torch.cat([vis_in, vis_tgt, vis_rec], dim=0) # (3*N, 1, H, W)
+            grid = vutils.make_grid(combined, nrow=n, normalize=False)
+            
+            self.logger.experiment.log({key: [wandb.Image(grid, caption="Top: Noisy Input, Mid: Target, Bot: Recon")]})
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
@@ -134,7 +181,7 @@ def main(config_path):
     )
 
     datamodule = WebDatasetDepthDataModule(dataloader_config, training_config)
-    model = DepthVAELightningModule(model_config, training_config)
+    model = DepthVAELightningModule(model_config, training_config, dataloader_config)
 
     last_ckpt_path = os.path.join(ckpt_dir, "last.ckpt")
     resume_ckpt = last_ckpt_path if os.path.isfile(last_ckpt_path) else None
